@@ -1,0 +1,17 @@
+# Local development: docker compose up --build  ->  http://localhost:8080
+services:
+  db:
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: ditu, POSTGRES_PASSWORD: ditu, POSTGRES_DB: ditu }
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U ditu"], interval: 3s, retries: 20 }
+  app:
+    build: .
+    depends_on: { db: { condition: service_healthy } }
+    ports: ["8080:10000"]
+    environment:
+      DATABASE_URL: postgres://ditu:ditu@db:5432/ditu?sslmode=disable
+      AUTH_SECRET: dev-only-change-me
+      ADMIN_KEY: dev-admin
+volumes:
+  pgdata:

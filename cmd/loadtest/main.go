@@ -1,12 +1,17 @@
+// Command loadtest connects many simulated players and reports latency and throughput.
+//
+//	DISABLE_RATE_LIMITS=1 go run ./cmd/server &
+//	go run ./cmd/loadtest -n 500 -pid $(pgrep -f 'cmd/server|/server$')
 package main
 
 import (
+	"bytes"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math"
+	"math/rand"
 	"net/http"
 	"os"
 	"sort"
@@ -18,127 +23,153 @@ import (
 	"github.com/coder/websocket"
 )
 
-type sample struct{ ms float64 }
+var (
+	base     = flag.String("url", "http://localhost:8080", "server base URL")
+	n        = flag.Int("n", 200, "number of simulated players")
+	dur      = flag.Duration("d", 30*time.Second, "how long to stay connected")
+	ramp     = flag.Duration("ramp", 10*time.Second, "time over which players connect")
+	pid      = flag.Int("pid", 0, "server process id (Linux) to report its memory")
+	snaps    atomic.Int64
+	bytesIn  atomic.Int64
+	connects atomic.Int64
+	failures atomic.Int64
+	mu       sync.Mutex
+	rtts     []float64
+)
+
+func rss(pid int) string {
+	if pid == 0 {
+		return "n/a"
+	}
+	b, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+	if err != nil {
+		return "n/a"
+	}
+	for _, l := range strings.Split(string(b), "\n") {
+		if strings.HasPrefix(l, "VmRSS:") {
+			return strings.TrimSpace(strings.TrimPrefix(l, "VmRSS:"))
+		}
+	}
+	return "n/a"
+}
+
+func register(i int, run string) (string, error) {
+	body, _ := json.Marshal(map[string]string{"username": fmt.Sprintf("lt%s_%d", run, i), "password": "loadtest-pass", "name": fmt.Sprintf("Bot %s%d", run, i)})
+	resp, err := http.Post(*base+"/api/register", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	var out struct{ Token, Error string }
+	json.NewDecoder(resp.Body).Decode(&out)
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("register: %d %s", resp.StatusCode, out.Error)
+	}
+	return out.Token, nil
+}
+
+func bot(ctx context.Context, i int, run string, wg *sync.WaitGroup) {
+	defer wg.Done()
+	tok, err := register(i, run)
+	if err != nil {
+		failures.Add(1)
+		if failures.Load() < 4 {
+			fmt.Println(err)
+		}
+		return
+	}
+	c, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(*base, "http")+"/ws", nil)
+	if err != nil {
+		failures.Add(1)
+		return
+	}
+	defer c.CloseNow()
+	c.SetReadLimit(1 << 20)
+	hello, _ := json.Marshal(map[string]string{"t": "hello", "token": tok})
+	if c.Write(ctx, websocket.MessageText, hello) != nil {
+		failures.Add(1)
+		return
+	}
+	connects.Add(1)
+	go func() {
+		for {
+			_, data, err := c.Read(ctx)
+			if err != nil {
+				return
+			}
+			bytesIn.Add(int64(len(data)))
+			if bytes.Contains(data, []byte(`"t":"snap"`)) {
+				snaps.Add(1)
+			} else if bytes.Contains(data, []byte(`"t":"pong"`)) {
+				var p struct{ TS int64 }
+				json.Unmarshal(data, &p)
+				mu.Lock()
+				rtts = append(rtts, float64(time.Now().UnixMilli()-p.TS))
+				mu.Unlock()
+			}
+		}
+	}()
+	rng := rand.New(rand.NewSource(int64(i)))
+	yaw, seq := rng.Float64()*6, 0
+	tk := time.NewTicker(50 * time.Millisecond)
+	defer tk.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tk.C:
+			seq++
+			if seq%40 == 0 {
+				yaw += rng.Float64() - 0.5
+			}
+			m := map[string]any{"t": "in", "s": seq, "mz": 1, "yaw": yaw, "r": seq%100 < 50}
+			if seq%200 == 0 {
+				m["j"] = true
+			}
+			b, _ := json.Marshal(m)
+			if c.Write(ctx, websocket.MessageText, b) != nil {
+				return
+			}
+			if seq%20 == 0 {
+				p, _ := json.Marshal(map[string]any{"t": "ping", "ts": time.Now().UnixMilli()})
+				c.Write(ctx, websocket.MessageText, p)
+			}
+			if seq%100 == 0 {
+				ch, _ := json.Marshal(map[string]any{"t": "chat", "ch": "global", "text": "xin chào cả trại"})
+				c.Write(ctx, websocket.MessageText, ch)
+			}
+		}
+	}
+}
 
 func main() {
-	n := flag.Int("n", 100, "Số client giả lập")
-	rate := flag.Int("rate", 1, "Số ping mỗi client mỗi giây")
-	url := flag.String("url", "ws://localhost:8080/ws", "WebSocket URL")
-	pid := flag.Int("pid", 0, "PID server để đọc RAM trên Linux")
 	flag.Parse()
-	if *n < 1 || *rate < 1 || *rate > 8 {
-		fmt.Fprintln(os.Stderr, "n và rate phải lớn hơn 0")
-		os.Exit(2)
-	}
-	var connected, failed atomic.Int64
-	lat := make(chan sample, *n**rate*10)
-	ctx, cancel := context.WithCancel(context.Background())
+	run := fmt.Sprintf("%x", time.Now().UnixNano()%0xfffff)
+	ctx, cancel := context.WithTimeout(context.Background(), *ramp+*dur)
 	defer cancel()
 	var wg sync.WaitGroup
+	fmt.Printf("starting %d bots (run %s), memory before: %s\n", *n, run, rss(*pid))
 	start := time.Now()
 	for i := 0; i < *n; i++ {
 		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			c, _, e := websocket.Dial(ctx, *url, &websocket.DialOptions{HTTPClient: &http.Client{Timeout: 10 * time.Second}})
-			if e != nil {
-				failed.Add(1)
-				return
-			}
-			defer c.Close(websocket.StatusNormalClosure, "")
-			connected.Add(1)
-			raw := make([]byte, 24)
-			_, _ = rand.Read(raw)
-			token := hex.EncodeToString(raw)
-			join, _ := json.Marshal(map[string]any{"t": "join", "token": token, "name": fmt.Sprintf("Test%04d", i), "color": "#f28c45"})
-			_ = c.Write(ctx, websocket.MessageText, join)
-			readCtx, stop := context.WithTimeout(ctx, 15*time.Second)
-			_, _, e = c.Read(readCtx)
-			stop()
-			if e != nil {
-				failed.Add(1)
-				return
-			}
-			pongCh := make(chan []byte, 128)
-			readErr := make(chan error, 1)
-			go func() {
-				for {
-					_, b, err := c.Read(ctx)
-					if err != nil {
-						readErr <- err
-						return
-					}
-					select {
-					case pongCh <- b:
-					default:
-					}
-				}
-			}()
-			ticker := time.NewTicker(time.Second / time.Duration(*rate))
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case err := <-readErr:
-					if ctx.Err() == nil && err != nil {
-						failed.Add(1)
-					}
-					return
-				case <-ticker.C:
-					sent := time.Now().UnixNano()
-					ping, _ := json.Marshal(map[string]any{"t": "ping", "sentAt": sent})
-					if err := c.Write(ctx, websocket.MessageText, ping); err != nil {
-						if ctx.Err() == nil {
-							failed.Add(1)
-						}
-						return
-					}
-				case b := <-pongCh:
-					var msg struct {
-						Type   string `json:"t"`
-						SentAt int64  `json:"sentAt"`
-					}
-					if json.Unmarshal(b, &msg) == nil && msg.Type == "pong" && msg.SentAt > 0 {
-						lat <- sample{float64(time.Now().UnixNano()-msg.SentAt) / 1e6}
-					}
-				}
-			}
-		}(i)
-		time.Sleep(time.Millisecond)
+		go bot(ctx, i, run, &wg)
+		time.Sleep(*ramp / time.Duration(*n))
 	}
-	time.Sleep(10 * time.Second)
-	cancel()
+	time.Sleep(*dur / 2)
+	fmt.Printf("mid-run: connected=%d memory=%s\n", connects.Load(), rss(*pid))
 	wg.Wait()
-	close(lat)
-	vals := []float64{}
-	sum := 0.0
-	for x := range lat {
-		vals = append(vals, x.ms)
-		sum += x.ms
-	}
-	sort.Float64s(vals)
-	avg := 0.0
-	if len(vals) > 0 {
-		avg = sum / float64(len(vals))
-	}
-	p95 := 0.0
-	if len(vals) > 0 {
-		p95 = vals[(len(vals)-1)*95/100]
-	}
-	fmt.Printf("clients yêu cầu: %d\nKết nối thành công: %d\nLỗi kết nối/đọc: %d\nPing đo được: %d\nĐộ trễ trung bình: %.2f ms\nĐộ trễ p95: %.2f ms\nThời gian: %.1fs\n", *n, connected.Load(), failed.Load(), len(vals), avg, p95, time.Since(start).Seconds())
-	if *pid > 0 {
-		if b, e := os.ReadFile(fmt.Sprintf("/proc/%d/status", *pid)); e == nil {
-			for _, line := range strings.Split(string(b), "\n") {
-				if strings.HasPrefix(line, "VmRSS:") {
-					fmt.Println("RAM server:", strings.TrimSpace(strings.TrimPrefix(line, "VmRSS:")))
-					break
-				}
-			}
-		} else {
-			fmt.Println("Không đọc được RAM PID:", e)
+	el := time.Since(start).Seconds()
+	mu.Lock()
+	sort.Float64s(rtts)
+	pct := func(p float64) float64 {
+		if len(rtts) == 0 {
+			return math.NaN()
 		}
-	} else {
-		fmt.Println("RAM server: dùng -pid PID (Linux) để đọc VmRSS")
+		return rtts[int(float64(len(rtts)-1)*p)]
 	}
+	fmt.Printf("connected=%d failed=%d snapshots=%d (%.0f/s) inbound=%.1f MB (%.1f KB/s per bot)\n",
+		connects.Load(), failures.Load(), snaps.Load(), float64(snaps.Load())/el, float64(bytesIn.Load())/1e6,
+		float64(bytesIn.Load())/1e3/el/math.Max(1, float64(connects.Load())))
+	fmt.Printf("ping rtt ms: p50=%.0f p95=%.0f p99=%.0f over %d samples; server memory after: %s\n", pct(.5), pct(.95), pct(.99), len(rtts), rss(*pid))
+	mu.Unlock()
 }

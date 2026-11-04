@@ -1,0 +1,29 @@
+# Render Blueprint: one Docker web service + a managed PostgreSQL database.
+# Use a paid Postgres plan for production: the free plan expires after a limited period.
+services:
+  - type: web
+    name: di-tu-online
+    runtime: docker
+    plan: starter            # WebSocket game server; 'free' sleeps when idle and drops connections
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: di-tu-online-db
+          property: connectionString
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: ADMIN_KEY
+        generateValue: true
+      - key: TRUST_PROXY
+        value: "1"
+      - key: MAX_PLAYERS_PER_PRISON
+        value: "24"
+      - key: GAME_DAY_SECONDS
+        value: "600"
+databases:
+  - name: di-tu-online-db
+    plan: basic-256mb
+    databaseName: ditu
+    user: ditu

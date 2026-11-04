@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Đi tù online</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="auth" class="overlay">
+  <form id="authForm" class="card" autocomplete="on">
+    <h1>Đi tù online</h1>
+    <p class="sub">Sống sót trong trại giam low-poly cùng bạn bè</p>
+    <div class="tabs"><button type="button" id="tabLogin" class="on">Đăng nhập</button><button type="button" id="tabReg">Đăng ký</button></div>
+    <label>Tên đăng nhập<input id="fUser" autocomplete="username" maxlength="20" required></label>
+    <label>Mật khẩu<input id="fPass" type="password" autocomplete="current-password" minlength="8" maxlength="72" required></label>
+    <label id="nameRow" hidden>Tên nhân vật<input id="fName" maxlength="16"></label>
+    <button id="fGo" class="primary">Vào trại</button>
+    <p id="authMsg" class="msg" role="alert"></p>
+  </form>
+</div>
+
+<div id="hud" hidden>
+  <div id="topbar" class="panel"><span id="room">Sân trại</span><span id="clock"></span><span id="net"></span></div>
+  <div id="stats" class="panel">
+    <div class="row"><b id="pname"></b><span id="cellTag"></span></div>
+    <div class="row"><span>Tiền trại</span><b id="money">0</b></div>
+    <div class="row"><span>Uy tín</span><b id="rep">0</b></div>
+    <div class="row"><span>Điểm cải tạo</span><b id="points">0</b></div>
+    <div class="row"><span>Án còn lại</span><b id="sentence">0</b></div>
+    <div class="bar"><i id="stamBar"></i><em>Thể lực <span id="stam">100</span></em></div>
+    <div class="bar disc"><i id="discBar"></i><em>Kỷ luật <span id="disc">70</span></em></div>
+  </div>
+  <div id="quests" class="panel"><h3>Nhiệm vụ</h3><ul id="qlist"></ul><div id="qweek"></div></div>
+  <div id="prompt" hidden></div>
+  <div id="actbar" hidden><span id="actlabel"></span><div><i id="actfill"></i></div></div>
+  <div id="toasts"></div>
+  <div id="iso" hidden></div>
+  <div id="chat" class="panel">
+    <div class="tabs"><button data-ch="global" class="on">Toàn trại</button><button data-ch="room">Phòng</button><button data-ch="dm">Riêng</button></div>
+    <div id="chatlog"></div>
+    <input id="chatin" maxlength="200" placeholder="Enter để chat · /w Tên nội dung · /report Tên lý do (tên có dấu cách: đặt trong \"\")" autocomplete="off">
+  </div>
+  <div id="help" class="panel">WASD đi · Shift chạy · Space nhảy · E tương tác · V đổi góc nhìn · 1-4 cử chỉ · Tab túi đồ · O trang phục · L xếp hạng</div>
+  <div id="btns"><button id="bInv">Túi đồ</button><button id="bOutfit">Trang phục</button><button id="bBoard">Xếp hạng</button><button id="bGfx">Đồ họa: cao</button></div>
+  <div id="touch" hidden><div id="stick"><i></i></div><button id="tJump">Nhảy</button><button id="tUse">E</button><button id="tView">V</button></div>
+</div>
+
+<div id="modal" class="overlay" hidden><div class="card wide"><button id="mClose" class="x" aria-label="Đóng">×</button><div id="mBody"></div></div></div>
+<div id="offerBox" class="panel" hidden></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
