@@ -2,54 +2,100 @@
 <html lang="vi">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#ffb347">
 <title>Đi tù online</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <canvas id="c"></canvas>
 
-<div id="auth" class="overlay">
-  <form id="authForm" class="card" autocomplete="on">
-    <h1>Đi tù online</h1>
+<div id="auth" class="overlay clear">
+  <form id="authForm" class="card auth" autocomplete="on">
+    <div class="logo"><span>Đi tù</span><b>online</b></div>
     <p class="sub">Sống sót trong trại giam low-poly cùng bạn bè</p>
-    <div class="tabs"><button type="button" id="tabLogin" class="on">Đăng nhập</button><button type="button" id="tabReg">Đăng ký</button></div>
+    <div class="seg"><button type="button" id="tabLogin" class="on">Đăng nhập</button><button type="button" id="tabReg">Tạo nhân vật</button></div>
     <label>Tên đăng nhập<input id="fUser" autocomplete="username" maxlength="20" required></label>
     <label>Mật khẩu<input id="fPass" type="password" autocomplete="current-password" minlength="8" maxlength="72" required></label>
     <label id="nameRow" hidden>Tên nhân vật<input id="fName" maxlength="16"></label>
-    <button id="fGo" class="primary">Vào trại</button>
+    <button id="fGo" class="btn primary big">Vào trại</button>
     <p id="authMsg" class="msg" role="alert"></p>
   </form>
 </div>
 
 <div id="hud" hidden>
-  <div id="topbar" class="panel"><span id="room">Sân trại</span><span id="clock"></span><span id="net"></span></div>
-  <div id="stats" class="panel">
-    <div class="row"><b id="pname"></b><span id="cellTag"></span></div>
-    <div class="row"><span>Tiền trại</span><b id="money">0</b></div>
-    <div class="row"><span>Uy tín</span><b id="rep">0</b></div>
-    <div class="row"><span>Điểm cải tạo</span><b id="points">0</b></div>
-    <div class="row"><span>Án còn lại</span><b id="sentence">0</b></div>
-    <div class="bar"><i id="stamBar"></i><em>Thể lực <span id="stam">100</span></em></div>
-    <div class="bar disc"><i id="discBar"></i><em>Kỷ luật <span id="disc">70</span></em></div>
+  <div id="pcard" class="ui">
+    <canvas id="portrait" width="72" height="72"></canvas>
+    <div class="pinfo">
+      <div class="pname"><b id="pname"></b><span id="lvl" class="badge">Cấp 1</span></div>
+      <div class="xp"><i id="xpFill"></i></div>
+      <div class="chips">
+        <span class="chip" title="Tiền trại"><i class="coin"></i><b id="money">0</b></span>
+        <span class="chip" title="Uy tín"><svg class="ic"><use href="#i-star"/></svg><b id="rep">0</b></span>
+        <span class="chip" title="Án còn lại"><svg class="ic"><use href="#i-cal"/></svg><b id="sentence">0</b></span>
+      </div>
+    </div>
+    <div class="meter green"><i id="stamBar"></i><em>Thể lực <span id="stam">100</span></em></div>
+    <div class="meter blue"><i id="discBar"></i><em>Kỷ luật <span id="disc">70</span></em></div>
   </div>
-  <div id="quests" class="panel"><h3>Nhiệm vụ</h3><ul id="qlist"></ul><div id="qweek"></div></div>
-  <div id="prompt" hidden></div>
+
+  <div id="topc">
+    <div id="clockPill" class="ui"><svg class="ic" id="clockIcon"><use href="#i-sun"/></svg><div><b id="clockTime">--:--</b><small id="clockPhase"></small></div></div>
+    <div id="roomRibbon">Sân trại</div>
+  </div>
+
+  <div id="rbtns">
+    <button id="bInv" class="rb" aria-label="Túi đồ"><svg class="ic"><use href="#i-bag"/></svg><span>Túi đồ</span></button>
+    <button id="bOutfit" class="rb" aria-label="Trang phục"><svg class="ic"><use href="#i-shirt"/></svg><span>Trang phục</span></button>
+    <button id="bBoard" class="rb" aria-label="Xếp hạng"><svg class="ic"><use href="#i-cup"/></svg><span>Xếp hạng</span></button>
+    <button id="bQuest" class="rb on" aria-label="Nhiệm vụ"><svg class="ic"><use href="#i-scroll"/></svg><span>Nhiệm vụ</span></button>
+    <button id="bGfx" class="rb" aria-label="Đồ họa"><svg class="ic"><use href="#i-gear"/></svg><span id="gfxTxt">Đồ họa cao</span></button>
+  </div>
+  <div id="quests" class="ui"><h3>Nhiệm vụ hôm nay</h3><ul id="qlist"></ul><div id="qweek"></div></div>
+
+  <div id="chat" class="ui">
+    <div class="chead"><div class="seg sm"><button data-ch="global" class="on">Toàn trại</button><button data-ch="room">Phòng</button><button data-ch="dm">Riêng</button></div><button id="chatToggle" class="mini" aria-label="Thu gọn">–</button></div>
+    <div id="chatlog"></div>
+    <input id="chatin" maxlength="200" placeholder="Nhấn Enter để chat…" autocomplete="off">
+  </div>
+
+  <div id="emotes">
+    <button data-e="1" aria-label="Vẫy tay"><svg class="ic"><use href="#i-wave"/></svg><kbd>1</kbd></button>
+    <button data-e="2" aria-label="Nhảy múa"><svg class="ic"><use href="#i-note"/></svg><kbd>2</kbd></button>
+    <button data-e="3" aria-label="Cười"><svg class="ic"><use href="#i-smile"/></svg><kbd>3</kbd></button>
+    <button data-e="4" aria-label="Ngồi"><svg class="ic"><use href="#i-chair"/></svg><kbd>4</kbd></button>
+  </div>
+  <button id="ctx" hidden><kbd>E</kbd><span id="ctxText"></span></button>
   <div id="actbar" hidden><span id="actlabel"></span><div><i id="actfill"></i></div></div>
+
+  <div id="minimap" class="ui"><canvas id="mm" width="176" height="134"></canvas><span id="mmFloor"></span></div>
+  <div id="hint">WASD đi · Shift chạy · Space nhảy · chuột xoay · V đổi góc nhìn · Enter chat</div>
+  <div id="net"></div>
   <div id="toasts"></div>
   <div id="iso" hidden></div>
-  <div id="chat" class="panel">
-    <div class="tabs"><button data-ch="global" class="on">Toàn trại</button><button data-ch="room">Phòng</button><button data-ch="dm">Riêng</button></div>
-    <div id="chatlog"></div>
-    <input id="chatin" maxlength="200" placeholder="Enter để chat · /w Tên nội dung · /report Tên lý do (tên có dấu cách: đặt trong \"\")" autocomplete="off">
-  </div>
-  <div id="help" class="panel">WASD đi · Shift chạy · Space nhảy · E tương tác · V đổi góc nhìn · 1-4 cử chỉ · Tab túi đồ · O trang phục · L xếp hạng</div>
-  <div id="btns"><button id="bInv">Túi đồ</button><button id="bOutfit">Trang phục</button><button id="bBoard">Xếp hạng</button><button id="bGfx">Đồ họa: cao</button></div>
-  <div id="touch" hidden><div id="stick"><i></i></div><button id="tJump">Nhảy</button><button id="tUse">E</button><button id="tView">V</button></div>
+  <div id="touch" hidden><div id="stick"><i></i></div><button id="tJump">Nhảy</button><button id="tView">V</button></div>
 </div>
 
-<div id="modal" class="overlay" hidden><div class="card wide"><button id="mClose" class="x" aria-label="Đóng">×</button><div id="mBody"></div></div></div>
-<div id="offerBox" class="panel" hidden></div>
+<div id="modal" class="overlay" hidden><div class="card wide" id="mCard"><button id="mClose" class="x" aria-label="Đóng">×</button><div id="mBody"></div></div></div>
+<div id="offerBox" class="ui" hidden></div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-bag" viewBox="0 0 24 24"><path d="M6 8h12l1 12H5z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></symbol>
+    <symbol id="i-shirt" viewBox="0 0 24 24"><path d="M8 4 3 7l2 4 3-1v10h8V10l3 1 2-4-5-3a4 4 0 0 1-8 0z"/></symbol>
+    <symbol id="i-cup" viewBox="0 0 24 24"><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3"/><path d="M12 14v4M8 20h8"/></symbol>
+    <symbol id="i-scroll" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></symbol>
+    <symbol id="i-wave" viewBox="0 0 24 24"><path d="M8 13V6a1.5 1.5 0 0 1 3 0v5M11 11V4.5a1.5 1.5 0 0 1 3 0V11M14 11V6a1.5 1.5 0 0 1 3 0v8a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-3l-2-3a1.5 1.5 0 0 1 2.4-1.8L8 14"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></symbol>
+    <symbol id="i-smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 14a4.5 4.5 0 0 0 8 0M9 9.5h.01M15 9.5h.01"/></symbol>
+    <symbol id="i-chair" viewBox="0 0 24 24"><path d="M7 4v9h10M7 13v7M17 13v7M7 17h10"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></symbol>
+  </defs>
+</svg>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

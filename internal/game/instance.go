@@ -243,6 +243,9 @@ func (i *Instance) join(e joinEv) {
 		p.body = world.Body{X: sp[0], Y: sp[1], Z: sp[2], Grounded: true}
 	}
 	p.yaw = d.Yaw
+	if d.X == 0 && d.Z == 0 {
+		p.yaw = math.Pi // new characters start facing north, into the compound
+	}
 	p.room = i.cfg.Map.RoomAt(p.body.X, p.body.Y, p.body.Z)
 	i.ensureQuests(p, now)
 	i.players[c.ID] = p

@@ -7,18 +7,25 @@ const (
 	wallT = 0.4
 	floor = 4.0 // upper floor level
 
-	cWall   = 0xb9b4a8
-	cWallUp = 0xc9c3b4
-	cDark   = 0x6b6a66
-	cFloor  = 0xd9d5c8
-	cYard   = 0xa9b79a
-	cFence  = 0x8c8f94
-	cWood   = 0xa9764a
-	cMetal  = 0x7b8794
-	cBed    = 0x5b7fa6
-	cDoor   = 0x8a5a3a
-	cLock   = 0x4a4f57
-	cLeaf   = 0x4f8a4a
+	// Colours are consumed by the client: outer wall colours (cB1..cB3) are also how the
+	// client recognises walls that get windows, so keep them distinct from interior colours.
+	cB1    = 0xbcd5ee // cell block, ground floor
+	cB1Up  = 0xd4e5f7 // cell block, upper floor
+	cB2    = 0xf4cf93 // canteen + classroom
+	cB3    = 0xf2e08a // workshop
+	cB4    = 0x56627a // guard block
+	cIn    = 0xf3ecdc // interior walls
+	cIn4   = 0x7a8499
+	cDark  = 0x6b6a66
+	cFloor = 0xe6e0d0
+	cYard  = 0xd9d3c4
+	cFence = 0xc9a98a
+	cWood  = 0xa9764a
+	cMetal = 0x7b8794
+	cBed   = 0x5b7fa6
+	cDoor  = 0x8a5a3a
+	cLock  = 0x4a4f57
+	cLeaf  = 0x4f8a4a
 )
 
 type gap struct{ c, w float64 }
@@ -95,7 +102,7 @@ func Build() *Map {
 	for _, lv := range []struct {
 		y float64
 		c int
-	}{{0, cWall}, {floor, cWallUp}} {
+	}{{0, cB1}, {floor, cB1Up}} {
 		b.wallX(4, 36, 4, lv.y, wallH, lv.c)
 		b.wallZ(4, 24, 4, lv.y, wallH, lv.c)
 		b.wallZ(4, 24, 36, lv.y, wallH, lv.c)
@@ -115,9 +122,9 @@ func Build() *Map {
 		b.box(4.2, z0, 7.8, z0+3, 0, float64(k), cDark, true)
 	}
 	b.box(12, 12, 28, 16, 0.01, 0.02, 0xe6c84a, false) // roll-call marking in the hall
-	b.wallZ(4, 18, 8, floor, wallH, cWallUp)
+	b.wallZ(4, 18, 8, floor, wallH, cIn)
 	for _, x := range []float64{15, 22, 29} {
-		b.wallZ(4, 18, x, floor, wallH, cWallUp)
+		b.wallZ(4, 18, x, floor, wallH, cIn)
 	}
 	var cg []gap
 	for i := 0; i < 4; i++ {
@@ -130,16 +137,16 @@ func Build() *Map {
 		b.box(x0+0.4, 5, x0+2.2, 7.2, floor, 0.55, cBed, true)
 		b.obj("bed"+string(rune('1'+i)), "bed", "Giường", x0+1.3, floor, 6.1)
 	}
-	b.wallX(8, 36, 18, floor, wallH, cWallUp, cg...)
+	b.wallX(8, 36, 18, floor, wallH, cIn, cg...)
 	b.room("hall", "Sảnh tầng 1", 4, 4, 36, 24, 0, 24)
 	b.room("corridor", "Hành lang tầng 2", 4, 18, 36, 24, 1, 24)
 
 	// ---- B2: canteen + classroom x40..76, z4..24
-	b.wallX(40, 76, 4, 0, wallH, cWall)
-	b.wallX(40, 76, 24, 0, wallH, cWall, gap{49, 2.4}, gap{67, 2.4})
-	b.wallZ(4, 24, 40, 0, wallH, cWall)
-	b.wallZ(4, 24, 76, 0, wallH, cWall)
-	b.wallZ(4, 24, 58, 0, wallH, cWall, gap{14, 2.0})
+	b.wallX(40, 76, 4, 0, wallH, cB2)
+	b.wallX(40, 76, 24, 0, wallH, cB2, gap{49, 2.4}, gap{67, 2.4})
+	b.wallZ(4, 24, 40, 0, wallH, cB2)
+	b.wallZ(4, 24, 76, 0, wallH, cB2)
+	b.wallZ(4, 24, 58, 0, wallH, cIn, gap{14, 2.0})
 	b.door("d_can", 49, 0, 24, 2.4, "x", false)
 	b.door("d_cls", 67, 0, 24, 2.4, "x", false)
 	b.door("d_mid", 58, 0, 14, 2.0, "z", false)
@@ -157,10 +164,10 @@ func Build() *Map {
 	b.box(63, 4.2, 71, 4.4, 1.0, 1.6, 0x2f4a3c, false) // blackboard
 
 	// ---- B3: workshop x4..30, z34..56
-	b.wallX(4, 30, 34, 0, wallH, cWall)
-	b.wallX(4, 30, 56, 0, wallH, cWall)
-	b.wallZ(34, 56, 4, 0, wallH, cWall)
-	b.wallZ(34, 56, 30, 0, wallH, cWall, gap{45, 2.4})
+	b.wallX(4, 30, 34, 0, wallH, cB3)
+	b.wallX(4, 30, 56, 0, wallH, cB3)
+	b.wallZ(34, 56, 4, 0, wallH, cB3)
+	b.wallZ(34, 56, 30, 0, wallH, cB3, gap{45, 2.4})
 	b.door("d_ws", 30, 0, 45, 2.4, "z", false)
 	b.room("workshop", "Xưởng", 4, 34, 30, 56, 0, 12)
 	for i := 0; i < 3; i++ {
@@ -170,12 +177,12 @@ func Build() *Map {
 	}
 
 	// ---- B4: guard block x60..76, z36..52 (office + two isolation cells)
-	b.wallX(60, 76, 36, 0, wallH, cDark)
-	b.wallX(60, 76, 52, 0, wallH, cDark)
-	b.wallZ(36, 52, 60, 0, wallH, cDark, gap{44, 2.0})
-	b.wallZ(36, 52, 76, 0, wallH, cDark)
-	b.wallZ(36, 52, 68, 0, wallH, cDark)
-	b.wallX(68, 76, 44, 0, wallH, cDark)
+	b.wallX(60, 76, 36, 0, wallH, cB4)
+	b.wallX(60, 76, 52, 0, wallH, cB4)
+	b.wallZ(36, 52, 60, 0, wallH, cB4, gap{44, 2.0})
+	b.wallZ(36, 52, 76, 0, wallH, cB4)
+	b.wallZ(36, 52, 68, 0, wallH, cIn4)
+	b.wallX(68, 76, 44, 0, wallH, cIn4)
 	b.door("d_office", 60, 0, 44, 2.0, "z", true)
 	b.room("office", "Văn phòng cai ngục", 60, 36, 68, 52, 0, 0)
 	b.room("iso1", "Biệt giam 1", 68, 36, 76, 44, 0, 1)

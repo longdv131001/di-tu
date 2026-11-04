@@ -15,41 +15,54 @@ const RENDER_DELAY = 120; // ms of interpolation delay for other players
 const S = {
   started: false, map: null, phys: null, world: null, scene: null, camera: null, renderer: null,
   me: null, body: { x: 42, y: 0, z: 58, vy: 0, grounded: true }, facing: 0, moving: false,
-  yaw: Math.PI, pitch: 0.35, dist: 5, first: false,
+  yaw: Math.PI, pitch: 0.42, dist: 6.2, first: false,
   seq: 0, acc: 0, pending: [], jump: false,
   ents: new Map(), self: null, selfKey: '', act: null, emote: 0, room: 'yard', rooms: new Map(),
   keys: {}, stick: { x: 0, y: 0 }, lowGfx: false, last: performance.now(), slow: 0, nearby: 0,
 };
 
 // ---------------- boot ----------------
+if (location.hash === '#debug') window.__S = S; // lets tests drive the camera
 ui.initAuth(start);
 ui.bindChat(onChatSubmit);
+ui.onOutfitDraft = (o) => { S.draftOutfit = o; ensureSelf(); };
+S.ready = initScene();
 const saved = localStorage.getItem('dtu_token');
 if (saved) start(saved);
+
+async function initScene() {
+  try {
+    S.map = await (await fetch('/api/map')).json();
+  } catch {
+    ui.showAuth('Không tải được bản đồ, hãy tải lại trang.');
+    return false;
+  }
+  S.phys = new Physics(S.map);
+  for (const r of S.map.rooms) S.rooms.set(r.id, r.name);
+  initRenderer();
+  ui.initMinimap(S.map);
+  document.querySelectorAll('#emotes button').forEach((b) => { b.onclick = () => emote(+b.dataset.e); });
+  S.last = performance.now();
+  requestAnimationFrame(frame);
+  return true;
+}
 
 async function start(token) {
   if (S.started) return;
   S.started = true;
   ui.showHud();
-  try {
-    S.map = await (await fetch('/api/map')).json();
-  } catch {
-    S.started = false; ui.showAuth('Không tải được bản đồ.'); return;
-  }
-  S.phys = new Physics(S.map);
-  for (const r of S.map.rooms) S.rooms.set(r.id, r.name);
-  initRenderer();
+  if (!(await S.ready)) { S.started = false; return; }
   net.current = new Net(token, { onMessage, onStatus: () => {}, onRtt: (r) => { S.rtt = r; } });
-  S.last = performance.now();
-  requestAnimationFrame(frame);
 }
 
 function initRenderer() {
   const canvas = $('c');
   S.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
   S.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  S.renderer.shadowMap.enabled = true;
+  S.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   S.scene = new THREE.Scene();
-  S.camera = new THREE.PerspectiveCamera(70, 1, 0.1, 220);
+  S.camera = new THREE.PerspectiveCamera(66, 1, 0.1, 400);
   S.world = buildWorld(S.map, S.scene);
   onResize();
   addEventListener('resize', onResize);
@@ -82,7 +95,7 @@ function onMessage(m) {
     case 'snap': onSnap(m); break;
     case 'door': S.world.setDoor(m.id, m.o); m.o ? S.phys.open.add(m.id) : S.phys.open.delete(m.id); break;
     case 'tp': S.body = { x: m.pos[0], y: m.pos[1], z: m.pos[2], vy: 0, grounded: true }; S.pending = []; break;
-    case 'chat': ui.addChat(m); break;
+    case 'chat': ui.addChat(m); say(m); break;
     case 'toast': ui.toast(m.k, m.text); break;
     case 'clock': ui.setClock(m); break;
     case 'shop': ui.openShop(m.items); break;
@@ -136,13 +149,20 @@ function rebuildAvatar(e) {
 }
 function removeEnt(e) { if (e.av) { S.scene.remove(e.av.root); e.av.dispose(); } }
 
+function say(m) {
+  if (m.ch !== 'global' && m.ch !== 'room') return;
+  if (S.me && m.from === S.me.name) { S.self?.say(m.text); return; }
+  for (const e of S.ents.values()) if (e.meta.name === m.from && e.av) { e.av.say(m.text); return; }
+}
+
 function ensureSelf() {
   if (!S.me || !S.scene) return;
-  const key = JSON.stringify(S.me.outfit) + S.me.name;
+  const outfit = S.draftOutfit || S.me.outfit;
+  const key = JSON.stringify(outfit) + S.me.name;
   if (S.selfKey === key) return;
   S.selfKey = key;
   if (S.self) { S.scene.remove(S.self.root); S.self.dispose(); }
-  S.self = new Avatar({ name: S.me.name, outfit: S.me.outfit });
+  S.self = new Avatar({ name: S.me.name, outfit });
   S.self.label.visible = false;
   S.scene.add(S.self.root);
 }
@@ -178,7 +198,7 @@ function initInput(canvas) {
   // touch controls
   if ('ontouchstart' in window) {
     S.touch = true;
-    $('touch').hidden = false; $('help').hidden = true;
+    $('touch').hidden = false; $('hint').hidden = true;
     const stick = $('stick'), knob = stick.firstElementChild;
     let sid = null;
     const move = (t) => {
@@ -201,7 +221,6 @@ function initInput(canvas) {
       }
     }, { passive: true });
     $('tJump').ontouchstart = (e) => { S.jump = true; e.preventDefault(); };
-    $('tUse').ontouchstart = (e) => { interact(); e.preventDefault(); };
     $('tView').ontouchstart = (e) => { toggleView(); e.preventDefault(); };
   }
 }
@@ -216,7 +235,8 @@ function setGfx(low) {
   S.lowGfx = low;
   S.renderer.setPixelRatio(low ? 1 : Math.min(devicePixelRatio, 1.5));
   S.renderer.setSize(innerWidth, innerHeight, false);
-  $('bGfx').textContent = 'Đồ họa: ' + (low ? 'thấp' : 'cao');
+  S.world.setQuality(low);
+  $('gfxTxt').textContent = 'Đồ họa ' + (low ? 'thấp' : 'cao');
 }
 
 function onChatSubmit(text, channel) {
@@ -325,6 +345,19 @@ function updateSelf(now, dt) {
 
 const camTarget = new THREE.Vector3(), camDir = new THREE.Vector3(), camPos = new THREE.Vector3();
 function updateCamera() {
+  if (!S.started || !S.me) { // login screen: slow fly-around of the compound
+    const a = performance.now() / 1000 * 0.06;
+    S.camera.position.set(S.map.w / 2 + Math.cos(a) * 70, 26, S.map.d / 2 + Math.sin(a) * 58);
+    S.camera.lookAt(S.map.w / 2, 0, S.map.d / 2 - 2);
+    return;
+  }
+  if (ui.modal === 'outfit') { // show the character from the front while dressing up
+    const b = S.body, fx = Math.sin(S.facing), fz = Math.cos(S.facing);
+    S.camera.position.set(b.x + fx * 3.0 + fz * 0.6, b.y + 1.5, b.z + fz * 3.0 - fx * 0.6);
+    S.camera.lookAt(b.x, b.y + 1.0, b.z);
+    return;
+  }
+  if (S.freeCam) { const f = S.freeCam; S.camera.position.set(f.x, f.y, f.z); S.camera.lookAt(f.tx, f.ty, f.tz); return; }
   const b = S.body, fx = Math.sin(S.yaw), fz = Math.cos(S.yaw);
   if (S.first) {
     S.camera.position.set(b.x, b.y + 1.62, b.z);
@@ -332,7 +365,7 @@ function updateCamera() {
     S.camera.lookAt(b.x + fx * cp, b.y + 1.62 + Math.sin(-S.pitch * 0.9 + 0.2), b.z + fz * cp);
     return;
   }
-  camTarget.set(b.x, b.y + 1.5, b.z);
+  camTarget.set(b.x, b.y + 1.35, b.z);
   const cp = Math.cos(S.pitch), sp = Math.sin(S.pitch);
   camDir.set(-fx * cp, sp, -fz * cp).normalize();
   const hit = S.world.obstacle(camTarget, camDir, S.dist + 0.3);
@@ -344,22 +377,28 @@ function updateCamera() {
 
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.1, (now - S.last) / 1000);
+  const raw = Math.min(0.25, (now - S.last) / 1000), dt = Math.min(0.1, raw);
   S.last = now;
-  if (!S.started) return;
+  if (!S.started || !S.me) { updateCamera(); S.world.update(dt, S.map.w / 2, 0, S.map.d / 2, S.camera.position); S.renderer.render(S.scene, S.camera); return; }
   if (!S.lowGfx) { // adaptive quality: fall back to low graphics when frames are slow
     S.slow = dt > 0.034 ? S.slow + dt : Math.max(0, S.slow - dt);
     if (S.slow > 4) { setGfx(true); ui.toast('warn', 'Đã chuyển sang đồ họa thấp để chạy mượt hơn.'); }
   }
-  simulate(dt);
+  simulate(raw);
   updateEntities(now, dt);
   updateSelf(now, dt);
-  S.world.update(dt, S.body.x, S.body.y, S.body.z);
   updateCamera();
+  S.world.update(dt, S.body.x, S.body.y, S.body.z, S.camera.position);
   S.renderer.render(S.scene, S.camera);
 
   const n = ui.modalOpen || ui.typing ? null : nearest();
-  ui.setPrompt(S.act || !n ? '' : n.kind === 'obj' ? `E: ${OBJ_PROMPT[n.o.kind] || n.o.label}` : `E: ${S.phys.open.has(n.d.id) ? 'Đóng' : 'Mở'} cửa${n.d.locked ? ' (khóa)' : ''}`);
+  ui.setCtx(S.act || !n ? '' : n.kind === 'obj' ? (OBJ_PROMPT[n.o.kind] || n.o.label) : `${S.phys.open.has(n.d.id) ? 'Đóng' : 'Mở'} cửa${n.d.locked ? ' (khóa)' : ''}`, interact);
   ui.tick();
+  if (now - (S.mmAt || 0) > 100) {
+    S.mmAt = now;
+    const others = [];
+    for (const e of S.ents.values()) if (e.buf.length) { const l = e.buf[e.buf.length - 1]; others.push({ x: l.x, z: l.z, guard: !!e.meta.guard }); }
+    ui.drawMinimap({ x: S.body.x, y: S.body.y, z: S.body.z, facing: S.facing }, others);
+  }
   if ((S.frames = (S.frames || 0) + 1) % 30 === 0) ui.setNet(S.rtt || 0, Math.max(0, S.nearby - (S.ents.has(-1) ? 1 : 0)));
 }

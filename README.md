@@ -2,7 +2,7 @@
 
 Game 3D nhiều người chơi chạy trên trình duyệt: thế giới nhà tù liền mạch nhiều tầng, đi bộ/chạy/nhảy, góc nhìn thứ nhất và thứ ba, vào từng phòng, tương tác đồ vật, cai ngục tuần tra, vượt ngục theo nhóm. Dữ liệu tài khoản và tiến trình lưu bền vững trong PostgreSQL.
 
-- **Client:** Three.js (đặt sẵn trong `web/static/vendor`, không cần CDN), JavaScript thuần, đồ họa low-poly dựng bằng hình khối, geometry tĩnh được gộp thành 2 mesh.
+- **Client:** Three.js (đặt sẵn trong `web/static/vendor`, không cần CDN), JavaScript thuần. Đồ họa low-poly phong cách casual: nhân vật chibi, bóng đổ mềm, bầu trời và mây, cửa sổ, sàn gạch, sân bóng, hoa, đèn đường. Phần tĩnh được gộp thành vài mesh. Font Nunito và Baloo 2 (giấy phép OFL) được đặt sẵn trong `web/static/fonts`.
 - **Server:** Go, WebSocket, server là nguồn sự thật (authoritative), tick 20 Hz, snapshot 10 Hz theo vùng quan sát.
 - **Database:** PostgreSQL (`lib/pq`), migration nhúng sẵn trong binary. Không đặt `DATABASE_URL` thì chạy bằng bộ nhớ (chỉ để thử, mất dữ liệu khi khởi động lại).
 
@@ -14,6 +14,8 @@ docker compose up --build     # có PostgreSQL, http://localhost:8080
 make test                     # go test -race ./... (đặt TEST_DATABASE_URL để chạy cả test PostgreSQL)
 make parity                   # kiểm tra vật lý JS khớp vật lý Go + smoke test client
 ```
+
+Giao diện: thẻ người chơi (cấp, kinh nghiệm, tiền, uy tín), đồng hồ ngày đêm, bản đồ nhỏ có hiện tầng và cai ngục, thanh cử chỉ, nút tương tác lớn, bong bóng chat trên đầu nhân vật, xem thử trang phục trực tiếp trên nhân vật. "Cấp" chỉ là hiển thị phía client, tính từ điểm cải tạo (5 điểm một cấp).
 
 Điều khiển: WASD đi, Shift chạy, Space nhảy, chuột xoay camera (bấm vào màn hình để khóa chuột), **V** đổi góc nhìn thứ nhất/thứ ba, **E** tương tác (cửa, giường, bàn làm việc, bàn học, xà đơn, quầy căng tin, hàng rào), **1-4** cử chỉ (vẫy tay, nhảy múa, cười, ngồi), **Tab** túi đồ, **O** trang phục và biểu cảm, **L** xếp hạng, **Enter** chat. Có điều khiển cảm ứng cho điện thoại.
 
@@ -63,6 +65,7 @@ internal/auth   PBKDF2-HMAC-SHA256, token ký HMAC
 internal/api    HTTP, WebSocket, hub gán người chơi vào trại, quản trị
 web/static      client (index.html, js/…)
 tools/parity    kiểm tra JS và Go cho cùng kết quả vật lý
+tools/screenshot chụp ảnh game thật bằng Chromium không giao diện (xem README trong thư mục)
 ```
 
 Giao thức WebSocket (JSON, khóa ngắn). Client gửi: `hello`, `in` (seq, mx, mz, yaw, j, r), `chat`, `use`, `door`, `eat`, `buy`, `craft`, `offer`, `offer_reply`, `emote`, `face`, `outfit`, `report`, `cancel`, `ping`. Server gửi: `welcome`, `snap` (ack, vị trí của bạn, người xung quanh, người mới, người rời đi), `me`, `door`, `act`, `clock`, `chat`, `toast`, `shop`, `offer`, `tp`, `err`.
