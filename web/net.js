@@ -1,5 +1,0 @@
-export class Net {
- constructor(onMessage,onStatus){this.onMessage=onMessage;this.onStatus=onStatus;this.ws=null;this.tabId=sessionStorage.getItem('ditu-tab-id');if(!this.tabId){this.tabId=crypto.randomUUID();sessionStorage.setItem('ditu-tab-id',this.tabId)}this.token=localStorage.getItem('ditu-token-'+this.tabId)||'';this.tokenKey='ditu-token-'+this.tabId;this.retry=0}
- connect(profile){this.profile=profile;const proto=location.protocol==='https:'?'wss':'ws';this.ws=new WebSocket(`${proto}://${location.host}/ws`);this.ws.onopen=()=>{this.retry=0;this.onStatus(true);this.send({t:'join',token:this.token,...profile})};this.ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch{return}if(m.token){this.token=m.token;localStorage.setItem(this.tokenKey,this.token);this.onMessage(m.prison);return}this.onMessage(m)};this.ws.onclose=()=>{this.onStatus(false);if(this.retry<8){setTimeout(()=>{this.retry++;this.connect(profile)},Math.min(5000,500+this.retry*500))}};this.ws.onerror=()=>this.ws.close()}
- send(m){if(this.ws?.readyState===WebSocket.OPEN)this.ws.send(JSON.stringify(m))}
-}
